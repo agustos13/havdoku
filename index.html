@@ -363,7 +363,7 @@ let autoX=lsGet('havdoku.autox')==='1';
 $('autox').checked=autoX;
 
 let diff=DIFF[lsGet('havdoku.diff')]?lsGet('havdoku.diff'):'orta';
-let timerStart=0,timerId=null;
+let lastTick=0,timerId=null;
 
 function save(){lsSet('havdoku.game',JSON.stringify(S))}
 let genToken=0;
@@ -452,11 +452,16 @@ function render(){
 
 // ---------- timer ----------
 function fmt(s){s=Math.floor(s);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
-function tick(){S.elapsed=(Date.now()-timerStart)/1000;$('time').textContent=fmt(S.elapsed)}
+// time only counts while the game is on screen: a gap longer than 2 s (app in background, phone asleep) is not added
+function tick(){const now=Date.now();if(timerId&&lastTick){const d=(now-lastTick)/1000;if(d>0&&d<2)S.elapsed+=d}lastTick=now;$('time').textContent=fmt(S.elapsed)}
 function startTimer(){stopTimer();$('time').textContent=fmt(S.elapsed);if(S.solved||!$('namecard').hidden||!$('rules').hidden)return;
-  timerStart=Date.now()-S.elapsed*1000;timerId=setInterval(()=>{tick();if(Math.floor(S.elapsed)%5===0)save()},500)}
+  lastTick=Date.now();timerId=setInterval(()=>{tick();if(Math.floor(S.elapsed)%5===0)save()},500)}
 function stopTimer(){if(timerId){clearInterval(timerId);timerId=null}}
-document.addEventListener('visibilitychange',()=>{if(!S||S.solved)return;if(document.hidden){if(timerId){tick();stopTimer();save()}}else startTimer()});
+function pauseTimer(){if(S&&timerId){tick();stopTimer();save()}}
+function resumeTimer(){if(S&&!S.solved&&!document.hidden&&!timerId)startTimer()}
+document.addEventListener('visibilitychange',()=>{document.hidden?pauseTimer():resumeTimer()});
+window.addEventListener('pagehide',pauseTimer);window.addEventListener('blur',pauseTimer);
+window.addEventListener('pageshow',resumeTimer);window.addEventListener('focus',resumeTimer);
 
 // ---------- input ----------
 function pushHist(){history.push(S.cells.slice());if(history.length>300)history.shift()}
